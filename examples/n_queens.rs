@@ -1,36 +1,12 @@
-#![allow(unused_variables)]
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
-extern crate ndarray;
-extern crate ndarray_npy;
-extern crate plotters;
-use ndarray::{Array2,s};
-use ndarray_npy::ReadNpyExt;
-use nalgebra::{DVector,DMatrix};
-
-mod optimizer;
-use optimizer::fit_biexponential;
-
-mod plot;
-use plot::plot_results;
-
-extern crate oxigen;
-extern crate rand;
-
 use oxigen::prelude::*;
 use rand::distributions::Uniform;
 use rand::prelude::*;
 use std::fmt::Display;
 use std::fs::File;
-// use oxigen::Genotype::GenotypeHash;
-// use rand::prelude::SmallRng;
 use std::slice::Iter;
 use std::vec::IntoIter;
-// use rand::FromEntropy;
-// use rand::rngs::SmallRng;
 
-#[derive(Clone, PartialEq, Eq, std::hash::Hash)]
+#[derive(Clone, PartialEq, Eq)]
 struct QueensBoard {
     genes: Vec<u8>,
 }
@@ -79,7 +55,7 @@ impl Genotype<u8> for QueensBoard {
 
     // This function returns the maximum score possible (n, since in the
     // worst case n queens collide) minus the number of queens that collide with others
-    fn fitness(&self) -> f64 {
+    fn fitness(&mut self) -> f64 {
         let size = self.genes.len();
         let diags_exceed = size as isize - 1_isize;
         let mut collisions = Vec::with_capacity(size);
@@ -137,19 +113,7 @@ impl Genotype<u8> for QueensBoard {
     fn is_solution(&self, fitness: f64) -> bool {
         fitness as usize == self.genes.len()
     }
-
-    // fn hash(&self) -> Self {
-    //     self.clone()
-    // }
 }
-
-
-fn read_example(input:&str) -> Result<ndarray::Array2<f64>, ndarray_npy::ReadNpyError> {
-    let reader = std::fs::File::open(input)?;
-    let arr = Array2::<f64>::read_npy(reader)?;
-    Ok(arr)
-}
-
 
 fn main() {
     let n_queens: u8 = 10;
@@ -182,17 +146,4 @@ fn main() {
         .population_log(2000, population_log)
         .run();
     println!("{}", solutions[0]);
-    // let arr = read_example("data/tesdata.npy").unwrap();
-    // // println!("@len={}\n", );
-    // let n = arr.shape()[0];
-    // let mut v_error = DVector::<f64>::from_element(n, 0.0);
-    // for k in 0..n {
-    //     let yv = arr.slice(s![k, ..]).to_vec();
-    //     let xv = ndarray::Array::linspace(0., 10., 146).to_vec();
-    //     let x = nalgebra::DVector::<f64>::from_vec(xv);
-    //     let y = nalgebra::DVector::<f64>::from_vec(yv);
-    //     let (s, p) = fit_biexponential(x, y, &[1.0, 2.0]);
-    //     v_error[k] = s;
-    // }
-    // plot_results(DVector::<f64>::from_iterator(n, (0..n).map(|x| x as f64)), v_error.clone(), v_error.clone(), "data/f_error.png");
 }

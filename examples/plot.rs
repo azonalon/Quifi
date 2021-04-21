@@ -36,4 +36,6 @@ pub fn plot_results(x: &DVector<f64>, y: &DVector<f64>, yf: &DVector<f64>, path:
     Ok(())
 }
 
-fn main () {}
+fn main () {
+
+}

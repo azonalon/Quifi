@@ -1,23 +1,33 @@
 [package]
-name = "quick_fitting"
+name = "quifi"
 version = "0.1.0"
 authors = ["Epsilonkugel"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 ndarray-npy = "0.8.0"
-ndarray = "0.15.1"
+ndarray = "0.14"
 nalgebra = "0.25.0"
 plotters = "0.3.0"
 levenberg-marquardt='0.8.0'
 approx = "0.4.0"
 rand_distr = "0.4.0"
-rand = {version="0.7.0", features=["small_rng"]}
-oxigen = { path = "./oxigen/oxigen" }
-# varpro = { path = "./varpro" }
-criterion = "0.3"
-# varpro = "0.2.0"
+rand = {version="0.8.3", features=["default"]}
+oxigen = { path = "oxigen" }
+numpy = "0.13"
+criterion = {version="0.3.4", features=['html_reports']}
+
 [profile.release]
 opt-level = 3
+
+[lib]
+name = "quifi"
+crate-type= ["cdylib"]
+
+[dependencies.pyo3]
+version = "0.13"
+features = ["extension-module"]
+
+[[bench]]
+name = "benchmarks"
+harness = false
