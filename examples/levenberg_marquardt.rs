@@ -9,7 +9,7 @@ fn main() {
      * LEVENBERG MARQUARDT
      */
     if false {
-        let mut problem = NExponentialProblem {
+        let mut problem = LevenbergMarquardtVarproProblem {
             p: DVector::<f64>::from_vec(vec![1., 1., 1., 1., 1.]),
             x: DVector::<f64>::from_vec(xv.clone()),
             y: DVector::<f64>::from_vec(yv.clone()),

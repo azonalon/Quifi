@@ -2,7 +2,7 @@ use nalgebra::{DVector};
 
 use levenberg_marquardt::{LevenbergMarquardt};
 
-use crate::varpro::NExponentialProblemVarpro;
+use crate::varpro::LevenbergMarquardtVarproProblem;
 use oxigen::prelude::*;
 
 // extern crate oxigen;
@@ -22,11 +22,11 @@ use rand::random;
 
 
 #[derive(Clone, PartialEq, Debug)]
-struct NonlinearParameters {
-    genes: Vec<f64>,
-    x: DVector<f64>,
-    y: DVector<f64>,
-    result: Option<NExponentialProblemVarpro>,
+pub struct NonlinearParameters {
+    pub genes: Vec<f64>,
+    pub x: DVector<f64>,
+    pub y: DVector<f64>,
+    pub result: Option<LevenbergMarquardtVarproProblem>,
 }
 impl Display for NonlinearParameters {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
@@ -35,9 +35,9 @@ impl Display for NonlinearParameters {
 }
 
 #[derive(Clone)]
-struct Points {
-    x: DVector<f64>,
-    y: DVector<f64>,
+pub struct Points {
+    pub x: DVector<f64>,
+    pub y: DVector<f64>,
 }
 impl Default for Points {
     // fn default() -> Self {Points{x: vec![], y: vec![] }}
@@ -76,7 +76,7 @@ impl Genotype<f64> for NonlinearParameters {
     // worst case n queens collide) minus the number of queens that collide with others
     fn fitness(&mut self) -> f64 {
         // println!("fitness {:?}", self.genes.as_slice());
-        let problem = NExponentialProblemVarpro::new(
+        let problem = LevenbergMarquardtVarproProblem::new(
             self.x.clone(),
             self.y.clone(),
             DVector::<f64>::from_element(self.x.len(), 1.0),
@@ -113,8 +113,8 @@ pub fn find_solution  (
     _std_dev: Option<&Vec<f64>>,
     _model: Option<crate::varpro::VarproModel>,
     _seed: Option<&Vec<f64>>, // suggested initial values
-    progress_log: Option<File>,
-) -> NExponentialProblemVarpro {
+    _progress_log: Option<File>,
+) -> (LevenbergMarquardtVarproProblem, GeneticExecution<f64, NonlinearParameters>) {
     let ps = Points {
         x: DVector::from(x.clone()), 
         y: DVector::from(y.clone())
@@ -127,7 +127,7 @@ pub fn find_solution  (
 
     let population_size = 2_i32.pow(log2 as u32) as usize;
     let nt = NTournaments(population_size/2);
-    let (solutions, _generation, _progress, population) = GeneticExecution::<f64, NonlinearParameters>::new()
+    let mut exec = GeneticExecution::<f64, NonlinearParameters>::new()
         .population_size(population_size)
         .genotype_size(n_parameters)
         .fitness_arguments(ps)
@@ -136,8 +136,8 @@ pub fn find_solution  (
             bound: 0.10,
             coefficient: -0.0002,
         })))
-        .stop_criterion(Box::new(StopCriteria::SolutionsFoundOrGeneration(1, 50)))
-        // .stop_criterion(Box::new(StopCriteria::Generation(100)))
+        // .stop_criterion(Box::new(StopCriteria::Generation(50)))
+        .stop_criterion(Box::new(StopCriteria::SolutionsFoundOrGeneration(1, 20)))
         .selection_rate(Box::new(SelectionRates::Linear(SlopeParams {
             start: log2 - 2_f64,
             bound: log2 / 1.5,
@@ -148,9 +148,13 @@ pub fn find_solution  (
             AgeThreshold(50),
             AgeSlope(1_f64),
         )))
-        .progress_log(20, progress_log)
+        .generate_history(true)
+        ;
+        // .progress_log(20, progress_log)
         // .population_log(2000, population_log)
+    let (solutions, _generation, _progress) = exec
         .run();
+    let population = exec.population.clone();
     assert!(population.len() > 0, "No Population ?");
     let mut s = solutions.iter().min_by(
         |x, y| 
@@ -171,5 +175,5 @@ pub fn find_solution  (
     }
     let sol = s.unwrap();
     let result = sol.result.clone().unwrap();
-    result
+    (result, exec)
 }

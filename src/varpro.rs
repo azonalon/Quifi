@@ -5,13 +5,10 @@ use crate::models::{exp_decay,exp_decay_dtau};
 // use pyo3::{IntoPy, types::PyFloat, PyAny, Py};
 
 pub struct VarproModel {
-
+    
 }
-// impl FromPyObject<'a> for DVector<f64> {
-
-// }
 #[derive(Clone, PartialEq, Debug)]
-pub struct NExponentialProblemVarpro {
+pub struct LevenbergMarquardtVarproProblem {
     // holds current value of the n parameters
     pub x: DVector<f64>, 
     pub y: DVector<f64>,
@@ -35,7 +32,7 @@ pub struct NExponentialProblemVarpro {
 }
 
 
-impl NExponentialProblemVarpro {
+impl LevenbergMarquardtVarproProblem {
     pub fn new(
         x: DVector<f64>, y: DVector<f64>, w: DVector<f64>, // weights
         alpha: DVector<f64>, // nonlinear parameter count
@@ -73,7 +70,7 @@ impl NExponentialProblemVarpro {
     }
 }
 
-impl LeastSquaresProblem<f64, Dynamic, Dynamic> for NExponentialProblemVarpro {
+impl LeastSquaresProblem<f64, Dynamic, Dynamic> for LevenbergMarquardtVarproProblem{
     type ParameterStorage = Owned<f64, Dynamic>;
     type ResidualStorage = Owned<f64, Dynamic>;
     type JacobianStorage = Owned<f64, Dynamic, Dynamic>;
@@ -128,12 +125,6 @@ impl LeastSquaresProblem<f64, Dynamic, Dynamic> for NExponentialProblemVarpro {
             // println!("This leads to numerical instability.");
             // println!("Maybe try to adjust initial parameters to not be equal.");
         }
-        // let temp  = self.U.transpose() * (self.w.zip_map(&yuse, |x, y| x*y));    
-        // self.c = self.V.clone() * (temp.zip_map(&self.s, |x,y| x/y));
-        // self.c = self.V.clone()* (
-        //     (self.U.transpose()*self.w.component_mul(&yuse))
-        //     .component_div(&self.s)
-        // );
         self.c = svd.pseudo_inverse(tol).unwrap() * self.w.component_mul(&yuse);
 
         self.y_est = self.phi.columns(0, self.n) * self.c.clone();

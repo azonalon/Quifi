@@ -36,8 +36,8 @@ fn varpro_benchmark(c: &mut Criterion) {
         LevenbergMarquardt::new().minimize(problem.clone());
     };
 
-    let mut group = c.benchmark_group("");
-    for size in (200..800).step_by(100) {
+    let mut group = c.benchmark_group("Varpro");
+    for size in (500..5000).step_by(500) {
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| routine(size));

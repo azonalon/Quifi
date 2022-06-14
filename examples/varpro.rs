@@ -6,8 +6,8 @@ use rand::{thread_rng};
 use quifi::varpro::NExponentialProblemVarpro;
 use rand_distr::Distribution;
 mod plot;
-use std::iter::FromIterator;
 extern crate rand_distr;
+use quifi::regression::Statistics;
 use levenberg_marquardt::{differentiate_numerically, 
                           LevenbergMarquardt, 
                           LeastSquaresProblem};
@@ -19,7 +19,7 @@ fn main() {
     let dist = rand_distr::Normal::new(0.0, 1.0).unwrap();
     let mut rng = thread_rng();
     let x = DVector::<f64>::from_iterator(300, (0..300).map(|x| (x as f64)/300.0));
-    let y = x.map(|x| 0.001*dist.sample(&mut rng) + 3.0*(-x*0.5).exp() + 5.0*(-x*3.0).exp());
+    let y = x.map(|x| 0.01*dist.sample(&mut rng) + -2.0*(-x*2.0).exp() + 1.0*(-x*5.0).exp()+2.0);
     
 
     let mut problem = NExponentialProblemVarpro::new(
@@ -48,8 +48,13 @@ fn main() {
     // ));
     let (result, report) = LevenbergMarquardt::new().minimize(problem);
     // assert!(report.objective_function.abs() < 1e-10);
+    let stats = result.statistics();
 
     println!("Final Residuals {}", report.objective_function.abs());
     println!("Optimal parameters {}", result.alpha);
+    println!("Covariance {:.3}", stats.covariance);
+    println!("Correlation {:.3}", stats.correlation);
+    println!("Parameter error {:.3}", stats.standard_error);
+    println!("t ratio {:.3}", stats.t_ratio);
     plot::plot_results(&result.x, &result.y, &result.y_est, "data/varpro.png").unwrap();
 }

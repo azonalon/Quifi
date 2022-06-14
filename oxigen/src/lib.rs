@@ -35,40 +35,35 @@ use std::marker::PhantomData;
 pub use stop_criteria::*;
 pub use survival_pressure::*;
 
-use historian::Histo;
 use rand_distr::{Distribution, Standard, Uniform};
 use rand::{Rng, thread_rng};
 use rayon::prelude::*;
-#[cfg(feature = "global_cache")]
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::prelude::*;
 use std::sync::mpsc::channel;
 
-const POPULATION_SEPARATOR: &[u8] = b"\n\n\n\n---------------------------------\n\n\n\n";
-const POPULATION_ERR_MSG: &str = "Error writing on population log file";
-const PROGRESS_ERR_MSG: &str = "Error writing in progress log file";
-const PROGRESS_HEADER: &[u8] = b"Generation\t\
-    Solutions\t\
-    Last progress\t\
-    Progress avg\t\
-    Progress std\t\
-    Progress max\t\
-    Progress min\t\
-    Progress p10\t\
-    Progress p25\t\
-    Progress median\t\
-    Progress p75\t\
-    Progress p90\t\
-    Fitness avg\t\
-    Fitness std\t\
-    Fitness max\t\
-    Fitness min\t\
-    Fitness p10\t\
-    Fitness p25\t\
-    Fitness median\t\
-    Fitness p75\t\
-    Fitness p90\n";
+// const POPULATION_SEPARATOR: &[u8] = b"\n\n\n\n---------------------------------\n\n\n\n";
+// const POPULATION_ERR_MSG: &str = "Error writing on population log file";
+// const PROGRESS_ERR_MSG: &str = "Error writing in progress log file";
+// const PROGRESS_HEADER: &[u8] = b"Generation\t\
+//     Solutions\t\
+//     Last progress\t\
+//     Progress avg\t\
+//     Progress std\t\
+//     Progress max\t\
+//     Progress min\t\
+//     Progress p10\t\
+//     Progress p25\t\
+//     Progress median\t\
+//     Progress p75\t\
+//     Progress p90\t\
+//     Fitness avg\t\
+//     Fitness std\t\
+//     Fitness max\t\
+//     Fitness min\t\
+//     Fitness p10\t\
+//     Fitness p25\t\
+//     Fitness median\t\
+//     Fitness p75\t\
+//     Fitness p90\n";
 
 /// Struct that defines the fitness of each individual and the related information.
 #[derive(Copy, Clone, Debug)]
@@ -86,14 +81,17 @@ pub struct Fitness {
 }
 
 /// Struct that defines a pair of individual-fitness
-#[derive(Debug)]
-pub struct IndWithFitness<T: PartialEq + Send + Sync, Ind: Genotype<T>> {
+#[derive(Clone, Copy, Debug)]
+pub struct IndWithFitness<T: PartialEq + Send + Sync, Ind: Genotype<T>> 
+// pub struct IndWithFitness<Ind: Genotype> 
+{
+    pub _phantom: PhantomData<T>,
     /// Individual
     pub ind: Ind,
     /// Fitness (can be not computed yet)
     pub fitness: Option<Fitness>,
-    _phantom: PhantomData<T>,
 }
+
 
 impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> IndWithFitness<T, Ind> {
     pub fn new(ind: Ind, fitness: Option<Fitness>) -> IndWithFitness<T, Ind> {
@@ -112,48 +110,40 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> Display for IndWithFitness<T,
 }
 
 /// Struct that defines a genetic algorithm execution.
-pub struct GeneticExecution<T: PartialEq + Send + Sync, Ind: Genotype<T>> {
+pub struct GeneticExecution<T: PartialEq + Send + Sync + Clone, Ind: Genotype<T> + Clone> {
     /// The number of individuals in the population.
-    population_size: usize,
+    pub population_size: usize,
     /// Population with all individuals and their respective fitnesses.
-    population: Vec<IndWithFitness<T, Ind>>,
+    pub population: Vec<IndWithFitness<T, Ind>>,
     /// Size of the genotype problem.
-    genotype_size: Ind::ProblemSize,
+    pub genotype_size: Ind::ProblemSize,
     /// Arguments passed to the fitness function
-    fitness_arguments: Ind::ArgumentType,
+    pub fitness_arguments: Ind::ArgumentType,
     /// The mutation rate variation along iterations and progress.
-    mutation_rate: Box<dyn MutationRate>,
+    pub mutation_rate: Box<dyn MutationRate>,
     /// The number of stages in the cup whose individuals are selected to crossover.
-    selection_rate: Box<dyn SelectionRate>,
+    pub selection_rate: Box<dyn SelectionRate>,
     /// The selection function.
-    selection: Box<dyn Selection>,
+    pub selection: Box<dyn Selection>,
     /// The age fitness decrease function.
-    age: Box<dyn Age>,
+    pub age: Box<dyn Age>,
     /// The crossover function.
-    crossover: Box<dyn Crossover<T, Ind>>,
+    pub crossover: Box<dyn Crossover<T, Ind>>,
     /// The function used to recompute the fitness using the full population just
     /// before survival pressure.
-    population_refitness: Box<dyn PopulationRefitness<T, Ind>>,
+    pub population_refitness: Box<dyn PopulationRefitness<T, Ind>>,
     /// The function used to replace individuals in the population.
-    survival_pressure: Box<dyn SurvivalPressure<T, Ind>>,
+    pub survival_pressure: Box<dyn SurvivalPressure<T, Ind>>,
     /// The stop criterion to finish execution.
-    stop_criterion: Box<dyn StopCriterion>,
+    pub stop_criterion: Box<dyn StopCriterion>,
     /// Cache fitness value of individuals or compute it in each iteration.
-    cache_fitness: bool,
-    /// Global cache for all evaluated individuals, i.e., if a new individual is
-    /// equal to a previous individual its fitness is not recomputed. Only valid
-    /// if cache_fitness is true.
-    global_cache: bool,
-    /// HashMap used for the global cache
-    #[cfg(feature = "global_cache")]
-    cache_map: HashMap<Ind::GenotypeHash, f64>,
-    /// Progress log, writes statistics of the population every certain number of generations.
-    progress_log: (u64, Option<File>),
-    /// Population log, writes the population and fitnesses every certain number of generations.
-    population_log: (u64, Option<File>),
+    pub cache_fitness: bool,
+    /// Storage for all generations of individuals (for debugging or report generation)
+    pub individual_history: Option<Vec<Vec<(Vec<T>, f64)>>>,
+    // population_log: (u64, Option<File>),
 }
 
-impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> Default for GeneticExecution<T, Ind> {
+impl<T: PartialEq + Send + Sync + Clone, Ind: Genotype<T>> Default for GeneticExecution<T, Ind> {
     fn default() -> Self {
         GeneticExecution {
             population_size: 64,
@@ -169,16 +159,15 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> Default for GeneticExecution<
             survival_pressure: Box::new(SurvivalPressureFunctions::Worst),
             stop_criterion: Box::new(StopCriteria::SolutionFound),
             cache_fitness: true,
-            global_cache: cfg!(feature = "global_cache"),
-            #[cfg(feature = "global_cache")]
-            cache_map: HashMap::new(),
-            progress_log: (0, None),
-            population_log: (0, None),
+            // progress_log: (0, None),
+            // population_log: (0, None),
+            // individual_history: None,
+            individual_history: Some(vec![]),
         }
     }
 }
 
-impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
+impl<T: PartialEq + Send + Sync + Clone, Ind: Genotype<T>> GeneticExecution<T, Ind> {
     /// Creates a new default genetic algorithm execution.
     pub fn new() -> Self {
         Self::default()
@@ -268,31 +257,29 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
         self.cache_fitness = new_cache;
         self
     }
-
-    /// Sets the global cache flag.
-    /// Panics: when trying to put it true without `global_cache` feature enabled.
-    pub fn global_cache(mut self, new_global_cache: bool) -> Self {
-        if cfg!(feature = "global_cache") {
-            self.global_cache = new_global_cache;
-        } else if new_global_cache {
-            panic!("global_cache feature must been enabled to enable global_cache");
-        } else {
-            self.global_cache = false;
+    ///
+    pub fn generate_history(mut self, generate: bool) -> Self {
+        if generate {
+            self.individual_history = Some(vec![]);
+        }
+        else {
+            self.individual_history = None;
         }
         self
     }
 
-    /// Sets the progress log.
-    pub fn progress_log(mut self, generations: u64, log_file: Option<File>) -> Self {
-        self.progress_log = (generations, log_file);
-        self
-    }
 
     /// Sets the progress log.
-    pub fn population_log(mut self, generations: u64, log_file: File) -> Self {
-        self.population_log = (generations, Some(log_file));
-        self
-    }
+    // pub fn progress_log(mut self, generations: u64, log_file: Option<File>) -> Self {
+    //     self.progress_log = (generations, log_file);
+    //     self
+    // }
+
+    // /// Sets the progress log.
+    // pub fn population_log(mut self, generations: u64, log_file: File) -> Self {
+    //     self.population_log = (generations, Some(log_file));
+    //     self
+    // }
 
     /// Run the genetic algorithm executiion until the `stop_criterion` is satisfied.
     ///
@@ -302,7 +289,7 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
     /// - The number of generations run.
     /// - The average progress in the last generations.
     /// - The entire population in the last generation (useful for resuming the execution).
-    pub fn run(mut self) -> (Vec<Ind>, u64, f64, Vec<IndWithFitness<T, Ind>>) {
+    pub fn run(&mut self) -> (Vec<Ind>, u64, f64) {
         // Initialize randomly the population
         while self.population.len() < self.population_size {
             self.population.push(IndWithFitness::new(
@@ -313,13 +300,9 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
         self.fix();
         self.compute_fitnesses(true);
 
-        if self.progress_log.0 > 0 {
-            self.print_progress_header();
-        }
-
         let (generation, progress, solutions) = self.run_loop();
 
-        (solutions, generation, progress, self.population)
+        (solutions, generation, progress)
     }
 
     fn run_loop(&mut self) -> (u64, f64, Vec<Ind>) {
@@ -338,6 +321,14 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
             .stop_criterion
             .stop(generation, progress, solutions.len(), &current_fitnesses)
         {
+            if self.individual_history.is_some() {
+                // let ind = self.population[0].clone();
+                self.individual_history.as_mut().unwrap().push(
+                    self.population.iter().map(|x| 
+                        (x.ind.iter().map(|x| x.clone()).collect(), 
+                         x.fitness.unwrap().fitness)).collect()
+                );
+            }
             generation += 1;
 
             mutation_rate =
@@ -369,12 +360,12 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
             progress = Self::update_progress(last_best, best, &mut last_progresses);
             last_best = best;
 
-            if self.progress_log.0 > 0 && generation % self.progress_log.0 == 0 {
-                self.print_progress(generation, progress, &last_progresses, solutions.len());
-            }
-            if self.population_log.0 > 0 && generation % self.population_log.0 == 0 {
-                self.print_population(generation);
-            }
+            // if self.progress_log.0 > 0 && generation % self.progress_log.0 == 0 {
+            //     self.print_progress(generation, progress, &last_progresses, solutions.len());
+            // }
+            // if self.population_log.0 > 0 && generation % self.population_log.0 == 0 {
+            //     self.print_population(generation);
+            // }
 
             self.update_age();
         }
@@ -382,102 +373,102 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
         (generation, progress, solutions)
     }
 
-    fn print_population(&mut self, generation: u64) {
-        if let Some(ref mut f) = self.population_log.1 {
-            f.write_all(format!("Generation {}\n", generation).as_bytes())
-                .expect(POPULATION_ERR_MSG);
-            for (i, ind) in self.population.iter().enumerate() {
-                f.write_all(
-                    format!(
-                        "Individual: {}; fitness: {}, age: {}, original_fitness: {}\n",
-                        i,
-                        ind.fitness.unwrap().fitness,
-                        ind.fitness.unwrap().age,
-                        ind.fitness.unwrap().original_fitness
-                    )
-                    .as_bytes(),
-                )
-                .expect(POPULATION_ERR_MSG);
-                f.write_all(format!("{}\n\n", ind.ind).as_bytes())
-                    .expect(POPULATION_ERR_MSG);
-            }
-            f.write_all(POPULATION_SEPARATOR).expect(POPULATION_ERR_MSG);
-        }
-    }
+    // fn print_population(&mut self, generation: u64) {
+    //     if let Some(ref mut f) = self.population_log.1 {
+    //         f.write_all(format!("Generation {}\n", generation).as_bytes())
+    //             .expect(POPULATION_ERR_MSG);
+    //         for (i, ind) in self.population.iter().enumerate() {
+    //             f.write_all(
+    //                 format!(
+    //                     "Individual: {}; fitness: {}, age: {}, original_fitness: {}\n",
+    //                     i,
+    //                     ind.fitness.unwrap().fitness,
+    //                     ind.fitness.unwrap().age,
+    //                     ind.fitness.unwrap().original_fitness
+    //                 )
+    //                 .as_bytes(),
+    //             )
+    //             .expect(POPULATION_ERR_MSG);
+    //             f.write_all(format!("{}\n\n", ind.ind).as_bytes())
+    //                 .expect(POPULATION_ERR_MSG);
+    //         }
+    //         f.write_all(POPULATION_SEPARATOR).expect(POPULATION_ERR_MSG);
+    //     }
+    // }
 
-    fn print_progress_header(&mut self) {
-        if let Some(ref mut f) = self.progress_log.1 {
-            f.write_all(PROGRESS_HEADER).expect(PROGRESS_ERR_MSG);
-        }
-    }
+    // fn print_progress_header(&mut self) {
+    //     if let Some(ref mut f) = self.progress_log.1 {
+    //         f.write_all(PROGRESS_HEADER).expect(PROGRESS_ERR_MSG);
+    //     }
+    // }
 
-    fn print_progress(
-        &mut self,
-        generation: u64,
-        _progress: f64,
-        last_progresses: &[f64],
-        n_solutions: usize,
-    ) {
-        let current_fitnesses = self.get_fitnesses();
-        if let Some(ref mut f) = self.progress_log.1 {
-            let progress_hist = Histo::default();
-            for prog in last_progresses.iter() {
-                progress_hist.measure(*prog);
-            }
-            let fit_hist = Histo::default();
-            for fit in &current_fitnesses {
-                fit_hist.measure(*fit);
-            }
-            let _fitness_avg =
-                current_fitnesses.iter().sum::<f64>() / current_fitnesses.len() as f64;
-            f.write_all(
-                format!(
-                    "{}\t{}\t{}\n",
-                    generation,
-                    n_solutions,
-                    // last_progresses[last_progresses.len() - 1],
-                    // progress,
-                    // (1_f64 / (last_progresses.len() - 1) as f64)
-                    //     * last_progresses
-                    //         .iter()
-                    //         .fold(0_f64, |acc, x| acc + (x - progress).powi(2))
-                    //         .sqrt(),
-                    // last_progresses
-                    //     .iter()
-                    //     .max_by(|x, y| x.partial_cmp(&y).unwrap())
-                    //     .unwrap(),
-                    // last_progresses
-                    //     .iter()
-                    //     .min_by(|x, y| x.partial_cmp(&y).unwrap())
-                    //     .unwrap(),
-                    // progress_hist.percentile(10_f64),
-                    // progress_hist.percentile(25_f64),
-                    // progress_hist.percentile(50_f64),
-                    // progress_hist.percentile(75_f64),
-                    // progress_hist.percentile(90_f64),
-                    // fitness_avg,
-                    // (1_f64 / (current_fitnesses.len() - 1) as f64)
-                    //     * current_fitnesses
-                    //         .iter()
-                    //         .fold(0_f64, |acc, x| acc + (x - fitness_avg).powi(2))
-                    //         .sqrt(),
-                    // current_fitnesses
-                    //     .iter()
-                    //     .max_by(|x, y| x.partial_cmp(&y).unwrap())
-                    //     .unwrap(),
-                    current_fitnesses
-                        .iter()
-                        .min_by(|x, y| x.partial_cmp(&y).unwrap())
-                        .unwrap(),
-                    // fit_hist.percentile(10_f64),
-                    // fit_hist.percentile(25_f64),
-                    // fit_hist.percentile(50_f64),
-                    // fit_hist.percentile(75_f64),
-                    // fit_hist.percentile(90_f64),
-                ).as_bytes(),
-            ).expect(PROGRESS_ERR_MSG);
-        }
-    }
+    // fn print_progress(
+    //     &mut self,
+    //     generation: u64,
+    //     _progress: f64,
+    //     last_progresses: &[f64],
+    //     n_solutions: usize,
+    // ) {
+    //     let current_fitnesses = self.get_fitnesses();
+    //     if let Some(ref mut f) = self.progress_log.1 {
+    //         let progress_hist = Histo::default();
+    //         for prog in last_progresses.iter() {
+    //             progress_hist.measure(*prog);
+    //         }
+    //         let fit_hist = Histo::default();
+    //         for fit in &current_fitnesses {
+    //             fit_hist.measure(*fit);
+    //         }
+    //         let _fitness_avg =
+    //             current_fitnesses.iter().sum::<f64>() / current_fitnesses.len() as f64;
+    //         f.write_all(
+    //             format!(
+    //                 "{}\t{}\t{}\n",
+    //                 generation,
+    //                 n_solutions,
+    //                 // last_progresses[last_progresses.len() - 1],
+    //                 // progress,
+    //                 // (1_f64 / (last_progresses.len() - 1) as f64)
+    //                 //     * last_progresses
+    //                 //         .iter()
+    //                 //         .fold(0_f64, |acc, x| acc + (x - progress).powi(2))
+    //                 //         .sqrt(),
+    //                 // last_progresses
+    //                 //     .iter()
+    //                 //     .max_by(|x, y| x.partial_cmp(&y).unwrap())
+    //                 //     .unwrap(),
+    //                 // last_progresses
+    //                 //     .iter()
+    //                 //     .min_by(|x, y| x.partial_cmp(&y).unwrap())
+    //                 //     .unwrap(),
+    //                 // progress_hist.percentile(10_f64),
+    //                 // progress_hist.percentile(25_f64),
+    //                 // progress_hist.percentile(50_f64),
+    //                 // progress_hist.percentile(75_f64),
+    //                 // progress_hist.percentile(90_f64),
+    //                 // fitness_avg,
+    //                 // (1_f64 / (current_fitnesses.len() - 1) as f64)
+    //                 //     * current_fitnesses
+    //                 //         .iter()
+    //                 //         .fold(0_f64, |acc, x| acc + (x - fitness_avg).powi(2))
+    //                 //         .sqrt(),
+    //                 // current_fitnesses
+    //                 //     .iter()
+    //                 //     .max_by(|x, y| x.partial_cmp(&y).unwrap())
+    //                 //     .unwrap(),
+    //                 current_fitnesses
+    //                     .iter()
+    //                     .min_by(|x, y| x.partial_cmp(&y).unwrap())
+    //                     .unwrap(),
+    //                 // fit_hist.percentile(10_f64),
+    //                 // fit_hist.percentile(25_f64),
+    //                 // fit_hist.percentile(50_f64),
+    //                 // fit_hist.percentile(75_f64),
+    //                 // fit_hist.percentile(90_f64),
+    //             ).as_bytes(),
+    //         ).expect(PROGRESS_ERR_MSG);
+    //     }
+    // }
 
     fn update_progress(last_best: f64, best: f64, last_progresses: &mut Vec<f64>) -> f64 {
         last_progresses.push(best - last_best);
@@ -512,47 +503,7 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
             .collect::<Vec<f64>>()
     }
 
-    #[cfg(feature = "global_cache")]
     fn compute_fitnesses(&mut self, refresh_on_nocache: bool) {
-        if cfg!(feature = "global_cache") && self.cache_fitness && self.global_cache {
-            let (sender, receiver) = channel();
-            self.population
-                .par_iter()
-                .enumerate()
-                .filter(|(_i, indwf)| indwf.fitness.is_none())
-                .for_each_with(sender, |s, (i, indwf)| {
-                    let hashed_ind = self.population[i].ind.hash();
-                    let new_fit_value = {
-                        match self.cache_map.get(&hashed_ind) {
-                            Some(val) => *val,
-                            None => indwf.ind.fitness(), // TODO: Arguments for fitness function
-                        }
-                    };
-                    s.send((i, new_fit_value, hashed_ind)).unwrap();
-                });
-            for (i, new_fit_value, hashed_ind) in receiver {
-                // only none fitness individuals are sent to the receiver
-                self.population[i].fitness = Some(Fitness {
-                    age: 0,
-                    fitness: new_fit_value,
-                    original_fitness: new_fit_value,
-                    age_effect: 0.0,
-                    refitness_effect: 0.0,
-                });
-                // insert in cache if it is not already in it
-                self.cache_map.entry(hashed_ind).or_insert(new_fit_value);
-            }
-        } else {
-            self.compute_fitnesses_without_global_cache(refresh_on_nocache);
-        }
-    }
-
-    #[cfg(not(feature = "global_cache"))]
-    fn compute_fitnesses(&mut self, refresh_on_nocache: bool) {
-        self.compute_fitnesses_without_global_cache(refresh_on_nocache);
-    }
-
-    fn compute_fitnesses_without_global_cache(&mut self, refresh_on_nocache: bool) {
         // let args = self.fitness_arguments.clone();
         // let args = Ind::ArgumentType::clone(&self.fitness_arguments);
         self.population
@@ -624,7 +575,6 @@ impl<T: PartialEq + Send + Sync, Ind: Genotype<T>> GeneticExecution<T, Ind> {
                 return false;
             }
         }
-
         true
     }
 
