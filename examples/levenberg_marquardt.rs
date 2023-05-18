@@ -1,5 +1,11 @@
 
 // We implement a trait for every problem we want to solve
+fn read_example(input:&str) -> Result<ndarray::Array2<f64>, ndarray_npy::ReadNpyError> {
+    let reader = std::fs::File::open(input)?;
+    let arr = Array2::<f64>::read_npy(reader)?;
+    Ok(arr)
+}
+
 fn main() {
     let arr = read_example("data/tesdata.npy").unwrap();
     println!("Local optimizer test.");
